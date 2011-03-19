@@ -4,6 +4,7 @@ object Test {
   def main(args: Array[String]): Unit = {
     // you start first
     val tree = new MaxGameTree(Board.initFourBVTTT())
+    //val tree = new MaxGameTree(Board.initRegTTT())
 
     val startTime = System.currentTimeMillis
     println("root tree value: " + tree.value)

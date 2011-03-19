@@ -4,12 +4,15 @@ import collection.mutable.ArrayBuffer
 
 sealed trait Player {
   def strRepr: String
+  def next: Player
 }
 case object Minimizer extends Player {
-  def strRepr = "o"
+  val strRepr = "o"
+  val next = Maximizer
 }
 case object Maximizer extends Player {
-  def strRepr = "x"
+  val strRepr = "x"
+  val next = Minimizer
 }
 
 object Board {
@@ -26,9 +29,21 @@ object Board {
     new RegTicTacToeBoard(Vector.fill(3)(Vector.fill(3)(None)))
 }
 
+/** boards are immutable */
 trait Board {
   import Board._
 
+  /** 
+   * Coordinate system (0-indexed):
+   * ------> x
+   * |
+   * |
+   * v
+   * y
+   */
+
+  def isOccupied(x: Int, y: Int): Boolean
+  def makeMove(x: Int, y: Int, player: Player): Board
   def winner: Option[BoardResult]
   def successors(player: Player): Seq[Board]
 }
@@ -158,6 +173,27 @@ class FourTicTacToeBoardBitVec(val minVec: Int, val maxVec: Int) extends Board {
     buf.toSeq
   }
 
+  /** assumes x,y valid coords */
+  @inline private def makeMask(x: Int, y: Int) = 
+    ((1 << (3-x)) << ((3-y)*4))
+
+  def isOccupied(x: Int, y: Int) = {
+    require(0 <= x && x < 4)
+    require(0 <= y && y < 4)
+    // y selects the row, x selects the column
+    ((minVec | maxVec) & makeMask(x, y)) != 0
+  }
+
+  def makeMove(x: Int, y: Int, player: Player) = {
+    require(!isOccupied(x, y))
+    player match {
+      case Maximizer =>
+        new FourTicTacToeBoardBitVec(minVec, maxVec | makeMask(x, y))
+      case Minimizer =>
+        new FourTicTacToeBoardBitVec(minVec | makeMask(x, y), maxVec)
+    }
+  }
+
   override def toString = {
     @inline def sliceToVec(slice: Int, player: Player): Vector[Option[Player]] = {
       Vector(if ((slice & 0x8) != 0) Some(player) else None,
@@ -258,12 +294,23 @@ class FourTicTacToeBoard(val config: Vector[Vector[Option[Player]]]) extends Boa
         case None => List(new FourTicTacToeBoard(nextConfig(player, i, j)))
         case _    => Nil }))
 
+  def isOccupied(x: Int, y: Int) = {
+    require(0 <= x && x < 4)
+    require(0 <= y && y < 4)
+    config(y)(x).isDefined
+  }
+
+  def makeMove(x: Int, y: Int, player: Player) = {
+    require(!isOccupied(x, y))
+    new FourTicTacToeBoard(config.updated(y, config(y).updated(x, Some(player))))
+  }
+
   override def toString = {
     // ---------
-    // |x|o|x| |
-    // |x|o|x| |
-    // |x|o|x| |
-    // |x|o|x| |
+    // |x|o|x|o|
+    // |x|o|x|o|
+    // |x|o|x|o|
+    // |x|o|x|o|
     // ---------
 
     "---------\n" +
@@ -332,6 +379,17 @@ class RegTicTacToeBoard(val config: Vector[Vector[Option[Player]]]) extends Boar
     (0 until 3).flatMap(i => (0 until 3).flatMap(j => config(i)(j) match {
         case None => List(new RegTicTacToeBoard(nextConfig(player, i, j)))
         case _    => Nil }))
+
+  def isOccupied(x: Int, y: Int) = {
+    require(0 <= x && x < 3)
+    require(0 <= y && y < 3)
+    config(y)(x).isDefined
+  }
+
+  def makeMove(x: Int, y: Int, player: Player) = {
+    require(!isOccupied(x, y))
+    new RegTicTacToeBoard(config.updated(y, config(y).updated(x, Some(player))))
+  }
 
   override def toString = {
     // -------
